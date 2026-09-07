@@ -1,6 +1,3 @@
-## Experiment No: 03
-## Date:
-
 # Building an AI Classifier: Identifying Cats, Dogs & Pandas with PyTorch
 
 ## AIM
@@ -175,8 +172,8 @@ model.load_state_dict(best_model_wts)
 
 # --- Evaluation ---
 test_loss, test_acc, all_preds, all_labels = evaluate(model, test_loader, criterion, device)
-print("Name: <YOUR NAME>")
-print("Register No: <YOUR REGISTER NUMBER>")
+print("Name: AHAMED JASEER SHA E")
+print("Register No: 212224040015")
 print(f"Test Loss: {test_loss:.4f}")
 print(f"Test Accuracy: {test_acc:.2f}%")
 print(classification_report(all_labels, all_preds, target_names=CLASS_NAMES))
@@ -197,8 +194,8 @@ def predict_image(image_path, model=model, class_names=CLASS_NAMES, device=devic
         logits = model(input_tensor)
         probs = F.softmax(logits, dim=1)
         pred_idx = logits.argmax(dim=1).item()
-    print("Name: <YOUR NAME>")
-    print("Register No: <YOUR REGISTER NUMBER>")
+    print("Name: AHAMED JASEER SHA E")
+    print("Register No: 212224040015")
     print(f"Predicted class: {class_names[pred_idx]}")
     return class_names[pred_idx], probs.cpu().numpy()
 ```
