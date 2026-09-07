@@ -58,7 +58,7 @@ Evaluate the best checkpoint on the test set (loss, accuracy), visualize a confu
 ## PROGRAM
 
 ```python
-import os, time, copy, random
+import os, time, copy, random, zipfile
 import numpy as np
 import torch
 import torch.nn as nn
@@ -78,6 +78,14 @@ SEED = 33
 random.seed(SEED); np.random.seed(SEED); torch.manual_seed(SEED); torch.cuda.manual_seed_all(SEED)
 
 # --- Data preparation ---
+# Option A: real Kaggle dataset -> kaggle datasets download -d gpiosenka/cats-dogs-pandas-images -p ./data --unzip
+# Option B: use the provided synthetic sample dataset (for pipeline testing only)
+SYNTHETIC_ZIP = "synthetic_cats_dogs_pandas.zip"
+if os.path.exists(SYNTHETIC_ZIP) and not os.path.exists("./data/train"):
+    with zipfile.ZipFile(SYNTHETIC_ZIP, "r") as zf:
+        zf.extractall(".")
+    print("Synthetic dataset extracted to ./data")
+
 DATA_DIR = "./data"
 TRAIN_DIR = os.path.join(DATA_DIR, "train")
 TEST_DIR = os.path.join(DATA_DIR, "test")
@@ -86,6 +94,36 @@ IMG_SIZE = 224
 BATCH_SIZE = 32
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
+
+# Create directories if they don't exist and move files
+if not os.path.exists(TRAIN_DIR):
+    os.makedirs(TRAIN_DIR)
+if not os.path.exists(TEST_DIR):
+    os.makedirs(TEST_DIR)
+
+for class_name in CLASS_NAMES:
+    os.makedirs(os.path.join(TRAIN_DIR, class_name), exist_ok=True)
+    os.makedirs(os.path.join(TEST_DIR, class_name), exist_ok=True)
+
+# Move image files into their respective train/test and class directories
+for filename in os.listdir('/content'):
+    if filename.endswith(('.jpg', '.png', '.jpeg')):
+        # Determine class name
+        found_class = None
+        for class_name in CLASS_NAMES:
+            if class_name in filename:
+                found_class = class_name
+                break
+
+        if found_class:
+            src_path = os.path.join('/content', filename)
+            if '_train_' in filename:
+                dst_path = os.path.join(TRAIN_DIR, found_class, filename)
+                os.rename(src_path, dst_path)
+            elif '_test_' in filename:
+                dst_path = os.path.join(TEST_DIR, found_class, filename)
+                os.rename(src_path, dst_path)
+
 
 train_transforms = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
@@ -106,12 +144,25 @@ test_dataset = datasets.ImageFolder(TEST_DIR, transform=test_transforms)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
+print("Classes found:", train_dataset.classes)
+print("Train size:", len(train_dataset), " Test size:", len(test_dataset))
+
 # --- Model design ---
 def build_model(num_classes=3, freeze_backbone=True):
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    # Try to load ImageNet-pretrained weights; fall back to random init if
+    # there's no internet access to download them (e.g. offline sandbox).
+    try:
+        weights = models.ResNet18_Weights.IMAGENET1K_V1
+        model = models.resnet18(weights=weights)
+        print("Loaded ImageNet-pretrained ResNet18 weights.")
+    except Exception as e:
+        print(f"Could not download pretrained weights ({e}); using random init instead.")
+        model = models.resnet18(weights=None)
+
     if freeze_backbone:
         for param in model.parameters():
             param.requires_grad = False
+
     in_features = model.fc.in_features
     model.fc = nn.Sequential(
         nn.Linear(in_features, 256),
@@ -147,6 +198,7 @@ def evaluate(model, loader, criterion, device):
             all_labels.extend(labels.cpu().numpy())
     return running_loss / total, 100.0 * correct / total, all_preds, all_labels
 
+start_time = time.time()
 for epoch in range(1, EPOCHS + 1):
     model.train()
     running_loss = 0.0
@@ -168,6 +220,7 @@ for epoch in range(1, EPOCHS + 1):
         best_model_wts = copy.deepcopy(model.state_dict())
         torch.save(best_model_wts, "best_model.pth")
 
+print(f"Training complete in {time.time() - start_time:.0f}s. Best val acc: {best_val_acc:.2f}%")
 model.load_state_dict(best_model_wts)
 
 # --- Evaluation ---
@@ -212,12 +265,11 @@ Source: [Cats vs Dogs vs Pandas — Kaggle](https://www.kaggle.com/datasets/gpio
 ### OUTPUT
 
 Fill in after running `notebooks/cat_dog_panda_transfer_learning.ipynb`:
+<img width="692" height="562" alt="image" src="https://github.com/user-attachments/assets/efe2dc3c-ef4c-4e40-9afd-da653853a6ae" />
 
-- Training/validation loss & accuracy curves: *(insert plot/screenshot here)*
-- Confusion matrix: *(insert plot/screenshot here)*
-- Example predictions grid: *(insert plot/screenshot here)*
-- Final test loss: *(insert value)*
-- Final test accuracy: *(insert value)*
+<img width="602" height="445" alt="image" src="https://github.com/user-attachments/assets/63b327e8-3336-4ce0-b757-d75c1bb6e53c" />
+
+
 
 ## RESULT
 
